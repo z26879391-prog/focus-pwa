@@ -10,54 +10,43 @@ let sessions = DB.get('sessions', []);
 let settings = DB.get('settings', { focus: 25, break: 5, long: 15 });
 let currentTaskId = DB.get('currentTaskId', null);
 
-// ── Timer State Persistence (daily reset) ─────────────────────────────────
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
-
-function loadTimerState() {
-  const saved = DB.get('timerState', null);
-  const today = todayStr();
-
-  // If saved state exists and is from today, restore it
-  if (saved && saved.date === today) {
-    return {
-      running: false, // never restore as running (page was closed)
-      mode: saved.mode || 'focus',
-      pomodoroCount: saved.pomodoroCount || 0,
-      remaining: saved.remaining ?? settings.focus * 60,
-      total: saved.total ?? settings.focus * 60,
-      interval: null,
-      date: today,
-    };
-  }
-
-  // New day → reset
-  return {
-    running: false,
-    mode: 'focus',
-    pomodoroCount: 0,
-    remaining: settings.focus * 60,
-    total: settings.focus * 60,
-    interval: null,
-    date: today,
-  };
-}
-
-function saveTimerState() {
-  DB.set('timerState', {
-    date: todayStr(),
-    mode: timerState.mode,
-    pomodoroCount: timerState.pomodoroCount,
-    remaining: timerState.remaining,
-    total: timerState.total,
-  });
-}
-
-let timerState = loadTimerState();
+let timerState = {
+  running: false,
+  mode: 'focus',       // 'focus' | 'break' | 'long'
+  pomodoroCount: 0,
+  remaining: settings.focus * 60,
+  total: settings.focus * 60,
+  interval: null,
+};
 
 let reviewWeekOffset = 0; // 0 = this week, -1 = last week, etc.
+let gachaCollection = DB.get('gacha_collection', []);
+let pendingGachaNextMode = 'break';
+
+// ── Gacha Items ────────────────────────────────────────────────────────────
+const GACHA_ITEMS = {
+  // 普通 Common (60%)
+  common_happy:    { id: 'common_happy',    name: '開心蕃茄',   emoji: '🍅',    desc: '每個蕃茄都是進步的一步！',         rarity: 'common' },
+  common_sleepy:   { id: 'common_sleepy',   name: '睏睏蕃茄',   emoji: '😴🍅',  desc: '努力過後，好好休息吧。',            rarity: 'common' },
+  common_sweat:    { id: 'common_sweat',    name: '認真蕃茄',   emoji: '💦🍅',  desc: '汗水是努力的勳章。',               rarity: 'common' },
+  common_think:    { id: 'common_think',    name: '思考蕃茄',   emoji: '🤔🍅',  desc: '深思熟慮才能做出好決策。',          rarity: 'common' },
+  common_strong:   { id: 'common_strong',   name: '加油蕃茄',   emoji: '💪🍅',  desc: '堅持就是勝利！',                   rarity: 'common' },
+  common_music:    { id: 'common_music',    name: '音樂蕃茄',   emoji: '🎵🍅',  desc: '在節奏中專注，效率倍增！',          rarity: 'common' },
+  common_book:     { id: 'common_book',     name: '讀書蕃茄',   emoji: '📚🍅',  desc: '知識就是力量！',                   rarity: 'common' },
+  common_coffee:   { id: 'common_coffee',   name: '咖啡蕃茄',   emoji: '☕🍅',  desc: '咖啡與專注，完美搭配！',            rarity: 'common' },
+  common_rain:     { id: 'common_rain',     name: '雨天蕃茄',   emoji: '🌧️🍅', desc: '下雨天最適合專心工作。',            rarity: 'common' },
+  common_star:     { id: 'common_star',     name: '閃亮蕃茄',   emoji: '⭐🍅',  desc: '你今天閃耀了！',                   rarity: 'common' },
+  // 稀有 Rare (30%)
+  rare_ninja:      { id: 'rare_ninja',      name: '忍者蕃茄',   emoji: '🥷🍅',  desc: '悄無聲息地完成任務，高手在民間！', rarity: 'rare' },
+  rare_chef:       { id: 'rare_chef',       name: '廚師蕃茄',   emoji: '👨‍🍳🍅', desc: '把工作做得像料理一樣精緻！',      rarity: 'rare' },
+  rare_astronaut:  { id: 'rare_astronaut',  name: '太空蕃茄',   emoji: '🚀🍅',  desc: '你的專注力已超越大氣層！',          rarity: 'rare' },
+  rare_wizard:     { id: 'rare_wizard',     name: '魔法蕃茄',   emoji: '🧙🍅',  desc: '施下專注魔法，任務迎刃而解！',      rarity: 'rare' },
+  rare_samurai:    { id: 'rare_samurai',    name: '武士蕃茄',   emoji: '⚔️🍅',  desc: '一心一意，斬斷分心！',             rarity: 'rare' },
+  // 傳說 Legendary (10%)
+  legend_golden:   { id: 'legend_golden',   name: '黃金蕃茄',   emoji: '🌟🍅',  desc: '極稀有！傳說中只有最專注的人才能獲得。', rarity: 'legendary' },
+  legend_rainbow:  { id: 'legend_rainbow',  name: '彩虹蕃茄',   emoji: '🌈🍅',  desc: '跨越所有困難，彩虹就在專注的彼端！',   rarity: 'legendary' },
+  legend_dragon:   { id: 'legend_dragon',   name: '蕃茄龍',     emoji: '🐉🍅',  desc: '上古傳說神獸，專注力的守護者！',       rarity: 'legendary' },
+};
 
 // ── Save ──────────────────────────────────────────────────────────────────
 function save() {
@@ -131,12 +120,9 @@ function startTimer() {
   timerState.interval = setInterval(() => {
     timerState.remaining--;
     updateTimerUI();
-    // Save every 5 seconds to avoid excessive writes
-    if (timerState.remaining % 5 === 0) saveTimerState();
     if (timerState.remaining <= 0) {
       clearInterval(timerState.interval);
       timerState.running = false;
-      saveTimerState();
       onTimerEnd();
     }
   }, 1000);
@@ -147,7 +133,6 @@ function pauseTimer() {
   clearInterval(timerState.interval);
   timerState.running = false;
   updateTimerUI();
-  saveTimerState();
 }
 
 function resetTimer() {
@@ -156,7 +141,6 @@ function resetTimer() {
   timerState.remaining = getModeDuration();
   timerState.total = timerState.remaining;
   updateTimerUI();
-  saveTimerState();
 }
 
 function getModeDuration(mode) {
@@ -185,7 +169,6 @@ function switchMode(mode) {
   timerState.remaining = getModeDuration(mode);
   timerState.total = timerState.remaining;
   updateTimerUI();
-  saveTimerState();
 }
 
 function skipTimer() {
@@ -302,6 +285,10 @@ function closeSessionModal(save) {
     DB.set('sessions', sessions);
     DB.set('todos', todos);
     renderTodos();
+    const nextMode = modal.dataset.nextMode || 'break';
+    modal.classList.remove('visible');
+    openGachaModal(session.id, nextMode);
+    return;
   }
   const nextMode = modal.dataset.nextMode || 'break';
   modal.classList.remove('visible');
@@ -530,6 +517,7 @@ function renderReview() {
 
   if (weekSessions.length === 0) {
     list.innerHTML = '<div class="empty-state">這週還沒有記錄<br><span style="font-size:11px;opacity:0.6">完成蕃茄鐘後會自動記錄在這裡</span></div>';
+    renderCollection();
     return;
   }
 
@@ -563,6 +551,7 @@ function renderReview() {
       list.appendChild(item);
     });
   });
+  renderCollection();
 }
 
 function formatDayLabel(d) {
@@ -587,6 +576,103 @@ function escapeHtml(s) {
 document.getElementById('prevWeek').addEventListener('click', () => { reviewWeekOffset--; renderReview(); });
 document.getElementById('nextWeek').addEventListener('click', () => {
   if (reviewWeekOffset < 0) { reviewWeekOffset++; renderReview(); }
+});
+
+// ── Gacha ─────────────────────────────────────────────────────────────────
+function drawGachaItem() {
+  const roll = Math.random() * 100;
+  let pool;
+  if (roll < 10) pool = 'legendary';
+  else if (roll < 40) pool = 'rare';
+  else pool = 'common';
+  const candidates = Object.values(GACHA_ITEMS).filter(i => i.rarity === pool);
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function saveGachaDraw(item, sessionId) {
+  gachaCollection.push({ itemId: item.id, drawnAt: Date.now(), sessionId });
+  DB.set('gacha_collection', gachaCollection);
+}
+
+function getCollectionSummary() {
+  const counts = {};
+  gachaCollection.forEach(entry => {
+    if (!counts[entry.itemId]) counts[entry.itemId] = { item: GACHA_ITEMS[entry.itemId], count: 0 };
+    counts[entry.itemId].count++;
+  });
+  const rarityOrder = { legendary: 0, rare: 1, common: 2 };
+  return Object.values(counts).sort((a, b) => rarityOrder[a.item.rarity] - rarityOrder[b.item.rarity]);
+}
+
+function openGachaModal(sessionId, nextMode) {
+  pendingGachaNextMode = nextMode || 'break';
+  document.getElementById('gachaMachine').dataset.state = 'idle';
+  document.getElementById('gachaModal').classList.add('visible');
+  // Store sessionId for use during draw
+  document.getElementById('gachaMachine').dataset.sessionId = sessionId || '';
+}
+
+function closeGachaModal() {
+  document.getElementById('gachaModal').classList.remove('visible');
+  switchMode(pendingGachaNextMode);
+}
+
+function handleGachaDraw() {
+  const machine = document.getElementById('gachaMachine');
+  if (machine.dataset.state !== 'idle') return;
+  machine.dataset.state = 'spinning';
+  setTimeout(() => {
+    const item = drawGachaItem();
+    const sessionId = machine.dataset.sessionId || null;
+    saveGachaDraw(item, sessionId);
+    renderGachaResult(item);
+    machine.dataset.state = 'reveal';
+  }, 1800);
+}
+
+function renderGachaResult(item) {
+  const emojiEl = document.getElementById('gachaResultEmoji');
+  emojiEl.textContent = item.emoji;
+  emojiEl.className = 'gacha-result__emoji gacha-result__emoji--' + item.rarity;
+  document.getElementById('gachaResultName').textContent = item.name;
+  document.getElementById('gachaResultDesc').textContent = item.desc;
+  const rarityEl = document.getElementById('gachaResultRarity');
+  rarityEl.textContent = { common: '普通', rare: '稀有', legendary: '傳說' }[item.rarity];
+  rarityEl.dataset.rarity = item.rarity;
+  const isNew = gachaCollection.filter(e => e.itemId === item.id).length === 1;
+  document.getElementById('gachaNewBadge').style.display = isNew ? 'inline-block' : 'none';
+}
+
+function renderCollection() {
+  const summary = getCollectionSummary();
+  const grid = document.getElementById('gachaCollectionGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const uniqueEl = document.getElementById('gachaUniqueCount');
+  const totalEl = document.getElementById('gachaTotalDraws');
+  if (uniqueEl) uniqueEl.textContent = summary.length;
+  if (totalEl) totalEl.textContent = gachaCollection.length;
+  if (summary.length === 0) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">還沒有收藏<br><span style="font-size:11px;opacity:0.6">完成蕃茄鐘後抽扭蛋來收集！</span></div>';
+    return;
+  }
+  summary.forEach(({ item, count }) => {
+    const card = document.createElement('div');
+    card.className = `gacha-card gacha-card--${item.rarity}`;
+    card.title = item.desc;
+    card.innerHTML = `
+      <div class="gacha-card__emoji">${item.emoji}</div>
+      <div class="gacha-card__name">${item.name}</div>
+      ${count > 1 ? `<div class="gacha-card__count">×${count}</div>` : ''}
+    `;
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById('btnGachaDraw').addEventListener('click', handleGachaDraw);
+document.getElementById('btnGachaClose').addEventListener('click', closeGachaModal);
+document.getElementById('gachaModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('gachaModal')) closeGachaModal();
 });
 
 // ── Notifications ─────────────────────────────────────────────────────────
@@ -653,7 +739,9 @@ if ('serviceWorker' in navigator) {
 document.getElementById('valFocus').textContent = settings.focus;
 document.getElementById('valBreak').textContent = settings.break;
 document.getElementById('valLong').textContent = settings.long;
-// timerState already loaded from localStorage (with daily reset logic)
+timerState.remaining = settings.focus * 60;
+timerState.total = settings.focus * 60;
 updateTimerUI();
 renderTodos();
 requestNotificationPermission();
+renderCollection();

@@ -602,6 +602,275 @@
 
     /* Bottom padding for scroll */
     .spacer { height: 40px; }
+
+    /* ── Gacha ── */
+    #gachaModal { z-index: 110; }
+
+    .modal--gacha {
+      align-items: center;
+      text-align: center;
+      padding: 28px 24px 24px;
+      max-width: 340px;
+    }
+
+    .gacha-machine { width: 100%; }
+
+    .gacha-machine__header {
+      font-family: 'Fraunces', serif;
+      font-size: 20px;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .gacha-machine__sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .gacha-viewport {
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    /* Idle capsule */
+    .gacha-idle-capsule {
+      font-size: 80px;
+      display: flex;
+      animation: gachaWobble 2s ease-in-out infinite;
+    }
+
+    /* Spinner */
+    .gacha-spinner {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      width: 120px;
+      height: 120px;
+    }
+
+    .gacha-capsule-spin {
+      font-size: 72px;
+      position: relative;
+      z-index: 1;
+      animation: gachaSpin 1.8s ease-in-out forwards;
+    }
+
+    .gacha-spin-rings {
+      position: absolute;
+      inset: 0;
+    }
+
+    .gacha-spin-rings::before,
+    .gacha-spin-rings::after {
+      content: '';
+      position: absolute;
+      inset: -10px;
+      border: 2px solid var(--tomato);
+      border-radius: 50%;
+      animation: gachaRingPulse 0.9s ease-out infinite;
+    }
+
+    .gacha-spin-rings::after { animation-delay: 0.45s; }
+
+    /* Result */
+    .gacha-result {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .gacha-result__emoji {
+      font-size: 72px;
+      line-height: 1;
+    }
+
+    .gacha-result__rarity {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .gacha-result__rarity[data-rarity="common"]    { color: var(--muted); }
+    .gacha-result__rarity[data-rarity="rare"]      { color: var(--break); }
+    .gacha-result__rarity[data-rarity="legendary"] { color: gold; }
+
+    .gacha-result__name {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .gacha-result__desc {
+      font-size: 11px;
+      color: var(--muted);
+      max-width: 220px;
+      line-height: 1.5;
+    }
+
+    .gacha-new-badge {
+      background: var(--tomato);
+      color: white;
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      padding: 3px 10px;
+      border-radius: 100px;
+      animation: newBadgeBounce 0.6s ease-in-out infinite;
+      display: none;
+    }
+
+    /* Actions */
+    .gacha-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .btn-gacha-draw {
+      background: linear-gradient(135deg, var(--tomato), #ff9a3c);
+      color: white;
+      border: none;
+      border-radius: 100px;
+      padding: 13px 36px;
+      font-family: 'DM Mono', monospace;
+      font-size: 15px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px var(--tomato-glow);
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: block;
+    }
+
+    .btn-gacha-draw:hover {
+      transform: translateY(-2px) scale(1.04);
+      box-shadow: 0 8px 28px var(--tomato-glow);
+    }
+
+    .btn-gacha-draw:active { transform: scale(0.97); }
+
+    .btn-gacha-close {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 100px;
+      padding: 10px 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      cursor: pointer;
+      transition: color 0.15s;
+      display: none;
+    }
+
+    .btn-gacha-close:hover { color: var(--text); }
+
+    /* State machine: idle */
+    .gacha-machine[data-state="idle"] .gacha-idle-capsule { display: flex; }
+    .gacha-machine[data-state="idle"] .gacha-spinner      { display: none; }
+    .gacha-machine[data-state="idle"] .gacha-result       { display: none; }
+    .gacha-machine[data-state="idle"] .btn-gacha-draw     { display: block; }
+    .gacha-machine[data-state="idle"] .btn-gacha-close    { display: none; }
+
+    /* State machine: spinning */
+    .gacha-machine[data-state="spinning"] .gacha-idle-capsule { display: none; }
+    .gacha-machine[data-state="spinning"] .gacha-spinner      { display: flex; }
+    .gacha-machine[data-state="spinning"] .gacha-result       { display: none; }
+    .gacha-machine[data-state="spinning"] .btn-gacha-draw     { display: none; }
+    .gacha-machine[data-state="spinning"] .btn-gacha-close    { display: none; }
+
+    /* State machine: reveal */
+    .gacha-machine[data-state="reveal"] .gacha-idle-capsule { display: none; }
+    .gacha-machine[data-state="reveal"] .gacha-spinner      { display: none; }
+    .gacha-machine[data-state="reveal"] .gacha-result       { display: flex; animation: gachaReveal 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
+    .gacha-machine[data-state="reveal"] .btn-gacha-draw     { display: none; }
+    .gacha-machine[data-state="reveal"] .btn-gacha-close    { display: block; }
+
+    /* Rarity glow on reveal emoji (class set via JS) */
+    .gacha-result__emoji--rare      { filter: drop-shadow(0 0 16px rgba(91,200,255,0.7)); }
+    .gacha-result__emoji--legendary { animation: legendaryShimmer 1.5s 0.6s ease-in-out infinite; }
+    .gacha-result__rarity[data-rarity="legendary"] ~ .gacha-result__name { color: gold; }
+
+    /* Collection section */
+    .gacha-collection-section { margin-top: 8px; }
+
+    .gacha-stats-mini {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .gacha-collection-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+      padding-bottom: 8px;
+    }
+
+    @media (max-width: 360px) {
+      .gacha-collection-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .gacha-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 6px 8px;
+      text-align: center;
+      position: relative;
+      cursor: default;
+      transition: transform 0.15s;
+    }
+
+    .gacha-card:hover { transform: translateY(-2px); }
+
+    .gacha-card--rare      { border-color: rgba(91,200,255,0.3); }
+    .gacha-card--legendary { border-color: rgba(255,215,0,0.45); background: rgba(255,215,0,0.04); }
+
+    .gacha-card__emoji { font-size: 26px; line-height: 1; }
+    .gacha-card__name  { font-size: 9px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+    .gacha-card__count { position: absolute; top: 4px; right: 6px; font-size: 9px; color: var(--accent); }
+
+    /* Keyframe animations */
+    @keyframes gachaWobble {
+      0%, 100% { transform: rotate(-5deg) scale(1); }
+      50%       { transform: rotate(5deg) scale(1.06); }
+    }
+
+    @keyframes gachaSpin {
+      0%   { transform: rotate(0deg) scale(0.7); opacity: 0.5; }
+      30%  { transform: rotate(360deg) scale(1.2); opacity: 1; }
+      65%  { transform: rotate(620deg) scale(1.0); opacity: 0.9; }
+      100% { transform: rotate(720deg) scale(1.05); opacity: 1; }
+    }
+
+    @keyframes gachaRingPulse {
+      0%   { transform: scale(0.6); opacity: 0.8; }
+      100% { transform: scale(2.4); opacity: 0; }
+    }
+
+    @keyframes gachaReveal {
+      0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+      60%  { transform: scale(1.15) rotate(4deg); opacity: 1; }
+      80%  { transform: scale(0.96) rotate(-1deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    @keyframes legendaryShimmer {
+      0%, 100% { filter: drop-shadow(0 0 8px gold) brightness(1); }
+      50%       { filter: drop-shadow(0 0 24px gold) brightness(1.35); }
+    }
+
+    @keyframes newBadgeBounce {
+      0%, 100% { transform: scale(1) rotate(-4deg); }
+      50%       { transform: scale(1.18) rotate(4deg); }
+    }
   </style>
 </head>
 <body>
@@ -714,6 +983,15 @@
     </div>
     <div class="section-title" style="margin-bottom:12px;">工作記錄</div>
     <div class="sessions-list" id="sessionsList"></div>
+    <div class="gacha-collection-section">
+      <div class="section-header" style="margin-top:24px;margin-bottom:8px;">
+        <div class="section-title">🥚 扭蛋收藏</div>
+        <div class="gacha-stats-mini">
+          <span id="gachaUniqueCount">0</span>/18 種 · 共 <span id="gachaTotalDraws">0</span> 次
+        </div>
+      </div>
+      <div class="gacha-collection-grid" id="gachaCollectionGrid"></div>
+    </div>
     <div class="spacer"></div>
   </div>
 </div>
@@ -770,6 +1048,34 @@
     <div class="modal-actions">
       <button class="btn-modal-skip" id="cancelTaskSelect">取消</button>
       <button class="btn-modal-save" id="clearCurrentTask">清除選擇</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gacha Modal -->
+<div class="modal-overlay" id="gachaModal">
+  <div class="modal modal--gacha">
+    <div class="gacha-machine" id="gachaMachine" data-state="idle">
+      <div class="gacha-machine__header">🎰 蕃茄扭蛋機</div>
+      <div class="gacha-machine__sub">恭喜完成一個蕃茄！抽個扭蛋吧 🥚</div>
+      <div class="gacha-viewport">
+        <div class="gacha-idle-capsule">🥚</div>
+        <div class="gacha-spinner">
+          <div class="gacha-spin-rings"></div>
+          <div class="gacha-capsule-spin">🥚</div>
+        </div>
+        <div class="gacha-result">
+          <div class="gacha-result__emoji" id="gachaResultEmoji"></div>
+          <div class="gacha-result__rarity" id="gachaResultRarity" data-rarity="common">普通</div>
+          <div class="gacha-result__name" id="gachaResultName"></div>
+          <div class="gacha-result__desc" id="gachaResultDesc"></div>
+          <div class="gacha-new-badge" id="gachaNewBadge">NEW!</div>
+        </div>
+      </div>
+      <div class="gacha-actions">
+        <button class="btn-gacha-draw" id="btnGachaDraw">🎰 抽！</button>
+        <button class="btn-gacha-close" id="btnGachaClose">繼續休息 →</button>
+      </div>
     </div>
   </div>
 </div>
