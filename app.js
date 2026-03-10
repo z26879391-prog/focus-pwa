@@ -10,14 +10,52 @@ let sessions = DB.get('sessions', []);
 let settings = DB.get('settings', { focus: 25, break: 5, long: 15 });
 let currentTaskId = DB.get('currentTaskId', null);
 
-let timerState = {
-  running: false,
-  mode: 'focus',       // 'focus' | 'break' | 'long'
-  pomodoroCount: 0,
-  remaining: settings.focus * 60,
-  total: settings.focus * 60,
-  interval: null,
-};
+// ── Timer State Persistence (daily reset) ─────────────────────────────────
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function loadTimerState() {
+  const saved = DB.get('timerState', null);
+  const today = todayStr();
+
+  // If saved state exists and is from today, restore it
+  if (saved && saved.date === today) {
+    return {
+      running: false, // never restore as running (page was closed)
+      mode: saved.mode || 'focus',
+      pomodoroCount: saved.pomodoroCount || 0,
+      remaining: saved.remaining ?? settings.focus * 60,
+      total: saved.total ?? settings.focus * 60,
+      interval: null,
+      date: today,
+    };
+  }
+
+  // New day → reset
+  return {
+    running: false,
+    mode: 'focus',
+    pomodoroCount: 0,
+    remaining: settings.focus * 60,
+    total: settings.focus * 60,
+    interval: null,
+    date: today,
+  };
+}
+
+function saveTimerState() {
+  DB.set('timerState', {
+    date: todayStr(),
+    mode: timerState.mode,
+    pomodoroCount: timerState.pomodoroCount,
+    remaining: timerState.remaining,
+    total: timerState.total,
+  });
+}
+
+let timerState = loadTimerState();
 
 let reviewWeekOffset = 0; // 0 = this week, -1 = last week, etc.
 
@@ -93,9 +131,12 @@ function startTimer() {
   timerState.interval = setInterval(() => {
     timerState.remaining--;
     updateTimerUI();
+    // Save every 5 seconds to avoid excessive writes
+    if (timerState.remaining % 5 === 0) saveTimerState();
     if (timerState.remaining <= 0) {
       clearInterval(timerState.interval);
       timerState.running = false;
+      saveTimerState();
       onTimerEnd();
     }
   }, 1000);
@@ -106,6 +147,7 @@ function pauseTimer() {
   clearInterval(timerState.interval);
   timerState.running = false;
   updateTimerUI();
+  saveTimerState();
 }
 
 function resetTimer() {
@@ -114,6 +156,7 @@ function resetTimer() {
   timerState.remaining = getModeDuration();
   timerState.total = timerState.remaining;
   updateTimerUI();
+  saveTimerState();
 }
 
 function getModeDuration(mode) {
@@ -142,6 +185,7 @@ function switchMode(mode) {
   timerState.remaining = getModeDuration(mode);
   timerState.total = timerState.remaining;
   updateTimerUI();
+  saveTimerState();
 }
 
 function skipTimer() {
@@ -609,8 +653,7 @@ if ('serviceWorker' in navigator) {
 document.getElementById('valFocus').textContent = settings.focus;
 document.getElementById('valBreak').textContent = settings.break;
 document.getElementById('valLong').textContent = settings.long;
-timerState.remaining = settings.focus * 60;
-timerState.total = settings.focus * 60;
+// timerState already loaded from localStorage (with daily reset logic)
 updateTimerUI();
 renderTodos();
 requestNotificationPermission();
