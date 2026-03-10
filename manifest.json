@@ -1,0 +1,25 @@
+{
+  "name": "Focus · 蕃茄鐘",
+  "short_name": "Focus",
+  "description": "蕃茄鐘 + 待辦事項 + 每週回顧",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0e16",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"]
+}
